@@ -87,10 +87,19 @@
 
             <section class="alarm-panel">
                 <div class="alarm-heading"><h3>CO₂ alarms</h3><span id="alarmState" class="alarm-state">Ready</span></div>
+                <label class="profile-label">Profile
+                    <select id="alarmProfile">
+                        <option value="home">Home</option>
+                        <option value="udoAwake">Udo awake</option>
+                        <option value="udoSleep">Udo sleeping</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </label>
                 <div class="alarm-grid">
                     <label>Warning <span>ppm</span><input id="warningPpm" type="number" min="400" max="5000" step="50"></label>
                     <label>Alarm <span>ppm</span><input id="alarmPpm" type="number" min="450" max="5000" step="50"></label>
                     <label>Delay <span>min</span><input id="alarmDelay" type="number" min="0" max="60" step="1"></label>
+                                    <label>Repeat <span>min</span><input id="repeatMinutes" type="number" min="1" max="60" step="1"></label>
                 </div>
                 <div class="alarm-options">
                     <label><input id="soundEnabled" type="checkbox"> Sound</label>
