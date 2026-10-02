@@ -384,3 +384,7 @@ footer {
 .secondary-btn.compact { padding:8px 12px; font-size:.8rem; }
 .alarm-note { margin-top:12px; color:var(--text-secondary); font-size:.72rem; line-height:1.35; }
 @media (max-width:380px) { .alarm-grid { grid-template-columns:1fr; } .app-container { padding:14px; } }
+
+.profile-label { display:block; color:var(--text-secondary); font-size:.75rem; margin-bottom:12px; }
+.profile-label select { width:100%; margin-top:6px; padding:10px; border-radius:10px; border:1px solid var(--glass-border); background:#17181d; color:white; font-size:1rem; }
+.alarm-grid { grid-template-columns:repeat(2,1fr); }
