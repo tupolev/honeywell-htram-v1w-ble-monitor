@@ -15,6 +15,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private Spinner profile;
     private EditText warning, alarm, delay, repeat;
+    private BroadcastReceiver serviceStatus;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
@@ -51,6 +52,7 @@ public class MainActivity extends Activity {
         note.setTextColor(Color.LTGRAY); note.setPadding(0,25,0,0); root.addView(note);
         setContentView(root);
 
+        serviceStatus = new BroadcastReceiver(){ @Override public void onReceive(Context c, Intent i){ status.setText(i.getStringExtra("text")); } };
         load();
         start.setOnClickListener(v -> requestAndStart());
         stop.setOnClickListener(v -> { stopService(new Intent(this,HtramService.class)); status.setText("Stopped"); });
@@ -61,22 +63,33 @@ public class MainActivity extends Activity {
     private EditText number(String s){ EditText e=new EditText(this);e.setText(s);e.setTextColor(Color.WHITE);e.setInputType(2);e.setBackgroundColor(Color.rgb(40,43,50));e.setPadding(18,8,18,8);return e; }
     private Button button(String s){ Button b=new Button(this);b.setText(s);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,22,0,0);b.setLayoutParams(p);return b; }
 
+    @Override protected void onStart(){ super.onStart(); registerReceiver(serviceStatus,new IntentFilter("net.kodesoft.htrammonitor.STATUS"),RECEIVER_NOT_EXPORTED); }
+    @Override protected void onStop(){ try{unregisterReceiver(serviceStatus);}catch(Exception ignored){} super.onStop(); }
+
     private void requestAndStart(){
+        status.setText("Checking permissions…");
         ArrayList<String> ps=new ArrayList<>();
         if(Build.VERSION.SDK_INT>=31){
             if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.BLUETOOTH_SCAN);
             if(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.BLUETOOTH_CONNECT);
         }
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.POST_NOTIFICATIONS);
-        if(!ps.isEmpty()){ requestPermissions(ps.toArray(new String[0]),REQ); return; }
+        if(!ps.isEmpty()){ status.setText("Waiting for Android permissions…"); requestPermissions(ps.toArray(new String[0]),REQ); return; }
         startMonitor();
     }
-    @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){ super.onRequestPermissionsResult(r,p,g); if(r==REQ){ for(int x:g)if(x!=PackageManager.PERMISSION_GRANTED)return; startMonitor(); } }
+    @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){ super.onRequestPermissionsResult(r,p,g); if(r==REQ){
+        boolean bluetoothOk=true;
+        for(int i=0;i<g.length;i++) if(g[i]!=PackageManager.PERMISSION_GRANTED && (p[i].equals(Manifest.permission.BLUETOOTH_SCAN)||p[i].equals(Manifest.permission.BLUETOOTH_CONNECT))) bluetoothOk=false;
+        if(!bluetoothOk){status.setText("Bluetooth permission denied");Toast.makeText(this,"Nearby devices permission is required",Toast.LENGTH_LONG).show();return;}
+        startMonitor();
+    } }
     private int n(EditText e,int d){try{return Integer.parseInt(e.getText().toString());}catch(Exception x){return d;}}
     private void startMonitor(){
         int w=n(warning,800), a=n(alarm,1200); if(a<=w){Toast.makeText(this,"Alarm must be higher than warning",Toast.LENGTH_LONG).show();return;}
         getSharedPreferences("alarm",0).edit().putInt("warning",w).putInt("alarm",a).putInt("delay",n(delay,2)).putInt("repeat",Math.max(1,n(repeat,2))).putInt("profile",profile.getSelectedItemPosition()).apply();
-        Intent i=new Intent(this,HtramService.class); ContextCompatShim.startForeground(this,i); status.setText("Starting… watch the notification");
+        Intent i=new Intent(this,HtramService.class); status.setText("Starting foreground service…");
+        try { ContextCompatShim.startForeground(this,i); Toast.makeText(this,"HTRAM monitor started",Toast.LENGTH_SHORT).show(); }
+        catch(Exception e){ status.setText("START ERROR: "+e.getClass().getSimpleName()+": "+e.getMessage()); }
     }
     private void load(){
         android.content.SharedPreferences p=getSharedPreferences("alarm",0);
