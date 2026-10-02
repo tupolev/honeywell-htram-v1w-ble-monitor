@@ -1,0 +1,11 @@
+{
+  "name": "HTRAM CO₂ Monitor",
+  "short_name": "HTRAM",
+  "description": "Local Web Bluetooth monitor and configurable CO₂ alarms for Honeywell HTRAM-V1-W",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0e12",
+  "theme_color": "#0d0e12",
+  "orientation": "any"
+}
