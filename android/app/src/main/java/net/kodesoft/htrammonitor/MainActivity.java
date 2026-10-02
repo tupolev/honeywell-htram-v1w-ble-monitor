@@ -13,6 +13,7 @@ import java.util.*;
 public class MainActivity extends Activity {
     private static final int REQ = 7;
     private TextView status, logView;
+    private ScrollView logScroll;
     private Spinner profile;
     private EditText warning, alarm, delay, repeat;
     private BroadcastReceiver serviceStatus;
@@ -29,8 +30,13 @@ public class MainActivity extends Activity {
         TextView logTitle=tv("Log",14); logTitle.setTextColor(Color.LTGRAY); root.addView(logTitle);
         logView=tv("",12); logView.setTextColor(Color.rgb(160,220,170)); logView.setBackgroundColor(Color.rgb(5,7,8)); logView.setPadding(16,12,16,12);
         logView.setTypeface(android.graphics.Typeface.MONOSPACE);
-        ScrollView logScroll=new ScrollView(this); logScroll.setFillViewport(true);
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,220); lp.setMargins(0,5,0,10); logScroll.setLayoutParams(lp); logScroll.addView(logView); root.addView(logScroll);
+        logScroll=new ScrollView(this); logScroll.setFillViewport(true); logScroll.setVerticalScrollBarEnabled(true);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,360); lp.setMargins(0,5,0,10); logScroll.setLayoutParams(lp); logScroll.addView(logView); root.addView(logScroll);
+        LinearLayout logButtons=new LinearLayout(this); logButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button copyLog=new Button(this); copyLog.setText("COPY LOG"); Button clearLog=new Button(this); clearLog.setText("CLEAR");
+        logButtons.addView(copyLog,new LinearLayout.LayoutParams(0,-2,1)); logButtons.addView(clearLog,new LinearLayout.LayoutParams(0,-2,1)); root.addView(logButtons);
+        copyLog.setOnClickListener(v->{ android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE); cm.setPrimaryClip(android.content.ClipData.newPlainText("HTRAM log",logView.getText())); Toast.makeText(this,"Log copied",Toast.LENGTH_SHORT).show(); });
+        clearLog.setOnClickListener(v->{ getSharedPreferences("debug",0).edit().remove("log").apply(); logView.setText(""); });
 
         profile = new Spinner(this);
         ArrayAdapter<String> pa = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -58,6 +64,8 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         serviceStatus = new BroadcastReceiver(){ @Override public void onReceive(Context c, Intent i){ String t=i.getStringExtra("text"); status.setText(t); appendLog(t); } };
+        String oldLog=getSharedPreferences("debug",0).getString("log","");
+        logView.setText(oldLog); logScroll.post(()->logScroll.fullScroll(View.FOCUS_DOWN));
         load();
         start.setOnClickListener(v -> requestAndStart());
         stop.setOnClickListener(v -> { stopService(new Intent(this,HtramService.class)); status.setText("Stopped"); });
@@ -65,8 +73,10 @@ public class MainActivity extends Activity {
 
     private void appendLog(String msg){
         String ts=new java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(new java.util.Date());
-        logView.append("["+ts+"] "+msg+"\n");
-        View p=(View)logView.getParent(); if(p instanceof ScrollView)((ScrollView)p).post(()->((ScrollView)p).fullScroll(View.FOCUS_DOWN));
+        String line="["+ts+"] "+msg+"\n"; logView.append(line);
+        String all=logView.getText().toString(); if(all.length()>12000) all=all.substring(all.length()-12000);
+        getSharedPreferences("debug",0).edit().putString("log",all).apply();
+        logScroll.post(()->logScroll.fullScroll(View.FOCUS_DOWN));
     }
     private TextView tv(String s,int size){ TextView t=new TextView(this); t.setText(s);t.setTextSize(size);t.setTextColor(Color.WHITE);return t; }
     private TextView label(String s){ TextView t=tv(s,14);t.setPadding(0,15,0,4);return t; }
