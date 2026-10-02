@@ -22,7 +22,8 @@ public class HtramService extends Service {
     static final String CH="htram_monitor", ALARM_CH="htram_alarm";
     Handler h=new Handler(Looper.getMainLooper());
     BluetoothGatt gatt; BluetoothGattCharacteristic write;
-    boolean stopped=false; long highSince=0,lastAlarm=0; int reconnectAttempt=0, seen=0;
+    boolean stopped=false; long highSince=0,lastAlarm=0; int reconnectAttempt=0, seen=0, namedSeen=0;
+    final java.util.HashSet<String> loggedDevices=new java.util.HashSet<>();
 
     @Override public void onCreate(){super.onCreate();channels();startForeground(100,notification("Searching for HTRAM…"));report("Service running — scanning for HTRAM…");scan();}
     @Override public int onStartCommand(Intent i,int f,int id){return START_STICKY;}
@@ -44,10 +45,13 @@ public class HtramService extends Service {
         if(stopped)return;if(!perm()){report("ERROR: Bluetooth scan permission missing");return;}
         BluetoothAdapter a=getSystemService(BluetoothManager.class).getAdapter(); if(a==null||!a.isEnabled()){update("Bluetooth is off");report("Bluetooth is off");retry();return;}
         ScanSettings s=new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-        try{seen=0;report("Scanning for HTRAM…");a.getBluetoothLeScanner().startScan(null,s,scanCb);h.postDelayed(()->{try{a.getBluetoothLeScanner().stopScan(scanCb);}catch(Exception ignored){} if(gatt==null){report("Scan timeout — "+seen+" BLE devices seen; retrying");retry();}},12000);}catch(Exception e){retry();}
+        try{seen=0;namedSeen=0;loggedDevices.clear();report("Scanning for HTRAM…");a.getBluetoothLeScanner().startScan(null,s,scanCb);h.postDelayed(()->{try{a.getBluetoothLeScanner().stopScan(scanCb);}catch(Exception ignored){} if(gatt==null){report("Scan timeout — "+seen+" advertisements, "+namedSeen+" named; retrying");retry();}},12000);}catch(Exception e){retry();}
     }
     final ScanCallback scanCb=new ScanCallback(){
-        @Override public void onScanResult(int type,ScanResult r){seen++;BluetoothDevice d=r.getDevice();String name=null;try{name=d.getName();}catch(SecurityException ignored){} if(name!=null&&name.startsWith("HTRAM")){report("HTRAM advertisement found: "+name+" RSSI "+r.getRssi()+" dBm");try{getSystemService(BluetoothManager.class).getAdapter().getBluetoothLeScanner().stopScan(this);}catch(Exception ignored){} connect(d);}}
+        @Override public void onScanResult(int type,ScanResult r){seen++;BluetoothDevice d=r.getDevice();String name=null,advName=null;try{name=d.getName();}catch(SecurityException ignored){}
+            ScanRecord rec=r.getScanRecord(); if(rec!=null)advName=rec.getDeviceName(); String best=advName!=null?advName:name;
+            if(best!=null){namedSeen++;String key=best+"|"+d.getAddress();if(loggedDevices.size()<40&&loggedDevices.add(key)){String uuids="";if(rec!=null&&rec.getServiceUuids()!=null)uuids=rec.getServiceUuids().toString();report("BLE named: '"+best+"' deviceName='"+name+"' advName='"+advName+"' RSSI="+r.getRssi()+" UUIDs="+uuids);}}
+            if(best!=null&&best.startsWith("HTRAM")){report("HTRAM advertisement found: "+best+" RSSI "+r.getRssi()+" dBm");try{getSystemService(BluetoothManager.class).getAdapter().getBluetoothLeScanner().stopScan(this);}catch(Exception ignored){} connect(d);}}
         @Override public void onScanFailed(int e){report("BLE scan failed, code "+e);retry();}
     };
     void connect(BluetoothDevice d){if(stopped)return;report("Found "+safeName(d)+" — connecting…");update("Connecting to "+safeName(d)+"…");try{gatt=d.connectGatt(this,false,cb,BluetoothDevice.TRANSPORT_LE);}catch(SecurityException e){retry();}}
