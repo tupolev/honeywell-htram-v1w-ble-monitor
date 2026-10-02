@@ -36,7 +36,7 @@ public class HtramService extends Service {
         NotificationChannel a=new NotificationChannel(ALARM_CH,"CO₂ alarms",NotificationManager.IMPORTANCE_HIGH);a.enableVibration(true);a.setVibrationPattern(new long[]{0,300,150,300,150,600});n.createNotificationChannel(a);
     }
     Notification notification(String text){
-        Intent open=new Intent(this,MainActivity.class);
+        Intent open=new Intent(this,MainActivity.class);open.putExtra("tab","monitor");
         PendingIntent pi=PendingIntent.getActivity(this,0,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Builder(this,CH).setSmallIcon(android.R.drawable.stat_sys_data_bluetooth).setContentTitle("HTRAM Monitor").setContentText(text).setContentIntent(pi).setOngoing(true).setOnlyAlertOnce(true).build();
     }
@@ -72,23 +72,27 @@ public class HtramService extends Service {
     void syncTime(){Calendar c=Calendar.getInstance(TimeZone.getTimeZone("UTC"));write(packet(new int[]{0x22,0x42},new int[]{1,c.get(Calendar.YEAR)%100,c.get(Calendar.MONTH)+1,c.get(Calendar.DAY_OF_MONTH),c.get(Calendar.HOUR_OF_DAY),c.get(Calendar.MINUTE),c.get(Calendar.SECOND)}));}
     final Runnable poll=new Runnable(){public void run(){if(stopped)return;if(write!=null){write(packet(new int[]{0x40,0x44},new int[]{2,0}));h.postDelayed(this,5000);}}};
     void write(byte[] b){if(gatt==null||write==null)return;try{write.setValue(b);gatt.writeCharacteristic(write);}catch(SecurityException ignored){}}
-    void parse(byte[] d){if(d==null||d.length<13||d[4]!=(byte)0x41||d[5]!=(byte)0x44)return;int co2=((d[7]&255)<<8)|(d[8]&255);int tr=d[9]&255,temp=tr<=128?tr:tr-256,hum=d[10]&255,bat=d[11]&255;String text="CO₂ "+co2+" ppm  •  "+temp+"°C  •  "+hum+"%  •  battery "+bat+"/4";update(text);report(text);alarm(co2);}
+    void parse(byte[] d){if(d==null||d.length<13||d[4]!=(byte)0x41||d[5]!=(byte)0x44)return;int co2=((d[7]&255)<<8)|(d[8]&255);int tr=d[9]&255,temp=tr<=128?tr:tr-256,hum=d[10]&255,bat=d[11]&255;getSharedPreferences("latest",0).edit().putInt("co2",co2).putInt("temp",temp).putInt("hum",hum).putInt("bat",bat).apply();String text="CO₂ "+co2+" ppm  •  "+temp+"°C  •  "+hum+"%  •  battery "+bat+"/4";update(text);reportReading(text,co2,temp,hum,bat);alarm(co2);}
     void alarm(int co2){
         android.content.SharedPreferences p=getSharedPreferences("alarm",0);int warning=p.getInt("warning",800), limit=p.getInt("alarm",1200), delay=p.getInt("delay",2), repeat=p.getInt("repeat",2);
-        long now=System.currentTimeMillis();if(co2<warning){highSince=0;lastAlarm=0;return;}if(co2<limit){highSince=0;lastAlarm=0;return;}
+        long now=System.currentTimeMillis();if(co2<warning){highSince=0;lastAlarm=0;p.edit().putBoolean("silenced",false).apply();return;}if(co2<limit){highSince=0;lastAlarm=0;return;}if(p.getBoolean("silenced",false))return;
         if(highSince==0)highSince=now;if(now-highSince<delay*60000L)return;if(lastAlarm!=0&&now-lastAlarm<repeat*60000L)return;lastAlarm=now;
         Uri u=RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-        Notification n=new Notification.Builder(this,ALARM_CH).setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle("High CO₂: "+co2+" ppm").setContentText("Ventilate the area. HTRAM alarm threshold exceeded.").setPriority(Notification.PRIORITY_MAX).setSound(u).setAutoCancel(true).build();
+        Intent openAlarm=new Intent(this,MainActivity.class);openAlarm.putExtra("tab","monitor");openAlarm.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);PendingIntent alarmPi=PendingIntent.getActivity(this,101,openAlarm,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n=new Notification.Builder(this,ALARM_CH).setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle("High CO₂: "+co2+" ppm").setContentText("Ventilate the area. HTRAM alarm threshold exceeded.").setPriority(Notification.PRIORITY_MAX).setSound(u).setContentIntent(alarmPi).setAutoCancel(true).build();
         getSystemService(NotificationManager.class).notify(101,n);
-        try{Ringtone r=RingtoneManager.getRingtone(this,u);r.play();h.postDelayed(r::stop,5000);}catch(Exception ignored){}
-        if(Build.VERSION.SDK_INT>=31){android.os.VibratorManager vm=(android.os.VibratorManager)getSystemService(VIBRATOR_MANAGER_SERVICE);vm.getDefaultVibrator().vibrate(android.os.VibrationEffect.createWaveform(new long[]{0,300,150,300,150,600},-1));}
-        else {android.os.Vibrator v=(android.os.Vibrator)getSystemService(VIBRATOR_SERVICE);v.vibrate(android.os.VibrationEffect.createWaveform(new long[]{0,300,150,300,150,600},-1));}
+        if(p.getBoolean("sound",true))try{Ringtone r=RingtoneManager.getRingtone(this,u);r.play();h.postDelayed(r::stop,5000);}catch(Exception ignored){}
+        if(p.getBoolean("vibrate",true)&&Build.VERSION.SDK_INT>=31){android.os.VibratorManager vm=(android.os.VibratorManager)getSystemService(VIBRATOR_MANAGER_SERVICE);vm.getDefaultVibrator().vibrate(android.os.VibrationEffect.createWaveform(new long[]{0,300,150,300,150,600},-1));}
+        else if(p.getBoolean("vibrate",true)){android.os.Vibrator v=(android.os.Vibrator)getSystemService(VIBRATOR_SERVICE);v.vibrate(android.os.VibrationEffect.createWaveform(new long[]{0,300,150,300,150,600},-1));}
     }
     void update(String s){getSystemService(NotificationManager.class).notify(100,notification(s));}
     void report(String text){
         String ts=new java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(new java.util.Date());
         android.content.SharedPreferences p=getSharedPreferences("debug",0);String old=p.getString("log","");String all=old+"["+ts+"] "+text+"\n";if(all.length()>12000)all=all.substring(all.length()-12000);p.edit().putString("log",all).apply();
         Intent i=new Intent("net.kodesoft.htrammonitor.STATUS");i.setPackage(getPackageName());i.putExtra("text",text);sendBroadcast(i);}
+    void reportReading(String text,int co2,int temp,int hum,int bat){
+        report(text);Intent i=new Intent("net.kodesoft.htrammonitor.STATUS");i.setPackage(getPackageName());i.putExtra("co2",co2);i.putExtra("temp",temp);i.putExtra("hum",hum);i.putExtra("bat",bat);sendBroadcast(i);
+    }
     void retry(){if(stopped)return;report("Reconnect scheduled (attempt "+(reconnectAttempt+1)+")");write=null;if(gatt!=null){try{gatt.close();}catch(Exception ignored){}gatt=null;}long wait=Math.min(30000,2000L*(1L<<Math.min(reconnectAttempt++,4)));h.postDelayed(this::scan,wait);}
     static final int[] CRC={0x0000,0x8005,0x800F,0x000A,0x801B,0x001E,0x0014,0x8011,0x8033,0x0036,0x003C,0x8039,0x0028,0x802D,0x8027,0x0022};
     byte[] packet(int[] cmd,int[] body){int len=2+body.length+3;byte[] pre=new byte[6+body.length];pre[0]=0x7b;pre[1]=0x41;pre[2]=0;pre[3]=(byte)len;pre[4]=(byte)cmd[0];pre[5]=(byte)cmd[1];for(int i=0;i<body.length;i++)pre[6+i]=(byte)body[i];int crc=crc16(pre);byte[] out=Arrays.copyOf(pre,pre.length+3);out[pre.length]=(byte)(crc>>8);out[pre.length+1]=(byte)crc;out[pre.length+2]=0x7d;return out;}
