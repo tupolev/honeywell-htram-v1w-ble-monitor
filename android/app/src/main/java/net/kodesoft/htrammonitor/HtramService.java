@@ -43,9 +43,8 @@ public class HtramService extends Service {
     void scan(){
         if(stopped||!perm())return;
         BluetoothAdapter a=getSystemService(BluetoothManager.class).getAdapter(); if(a==null||!a.isEnabled()){update("Bluetooth is off");retry();return;}
-        ScanFilter f=new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SERVICE)).build();
         ScanSettings s=new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-        try{a.getBluetoothLeScanner().startScan(Collections.singletonList(f),s,scanCb);h.postDelayed(()->{try{a.getBluetoothLeScanner().stopScan(scanCb);}catch(Exception ignored){} if(gatt==null)retry();},12000);}catch(Exception e){retry();}
+        try{a.getBluetoothLeScanner().startScan(null,s,scanCb);h.postDelayed(()->{try{a.getBluetoothLeScanner().stopScan(scanCb);}catch(Exception ignored){} if(gatt==null)retry();},12000);}catch(Exception e){retry();}
     }
     final ScanCallback scanCb=new ScanCallback(){
         @Override public void onScanResult(int type,ScanResult r){BluetoothDevice d=r.getDevice();String name=null;try{name=d.getName();}catch(SecurityException ignored){} if(name==null||name.startsWith("HTRAM")){try{getSystemService(BluetoothManager.class).getAdapter().getBluetoothLeScanner().stopScan(this);}catch(Exception ignored){} connect(d);}}
