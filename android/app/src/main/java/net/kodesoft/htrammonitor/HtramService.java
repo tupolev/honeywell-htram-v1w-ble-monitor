@@ -19,7 +19,7 @@ public class HtramService extends Service {
     static final UUID WRITE=UUID.fromString("3d115840-6e0b-11e4-b24f-0002a5d5c51b");
     static final UUID NOTIFY=UUID.fromString("f833d6c0-6e0b-11e4-9136-0002a5d5c51b");
     static final UUID CCCD=UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-    static final String CH="htram_monitor", ALARM_CH="htram_alarm";
+    static final String CH="htram_monitor", ALARM_CH="htram_alarm", BATTERY_CH="htram_battery";
     Handler h=new Handler(Looper.getMainLooper());
     BluetoothGatt gatt; BluetoothGattCharacteristic write;
     boolean stopped=false; long highSince=0,lastAlarm=0; int reconnectAttempt=0, seen=0, namedSeen=0;
@@ -33,7 +33,7 @@ public class HtramService extends Service {
     void channels(){
         NotificationManager n=getSystemService(NotificationManager.class);
         NotificationChannel c=new NotificationChannel(CH,"HTRAM monitoring",NotificationManager.IMPORTANCE_LOW);c.setDescription("Persistent HTRAM connection");n.createNotificationChannel(c);
-        NotificationChannel a=new NotificationChannel(ALARM_CH,"CO₂ alarms",NotificationManager.IMPORTANCE_HIGH);a.enableVibration(true);a.setVibrationPattern(new long[]{0,300,150,300,150,600});n.createNotificationChannel(a);
+        NotificationChannel a=new NotificationChannel(ALARM_CH,"CO₂ alarms",NotificationManager.IMPORTANCE_HIGH);a.enableVibration(true);a.setVibrationPattern(new long[]{0,300,150,300,150,600});n.createNotificationChannel(a);NotificationChannel b=new NotificationChannel(BATTERY_CH,"HTRAM battery warnings",NotificationManager.IMPORTANCE_DEFAULT);b.setDescription("Low HTRAM battery warnings");n.createNotificationChannel(b);
     }
     Notification notification(String text){
         Intent open=new Intent(this,MainActivity.class);open.putExtra("tab","monitor");
@@ -72,7 +72,15 @@ public class HtramService extends Service {
     void syncTime(){Calendar c=Calendar.getInstance(TimeZone.getTimeZone("UTC"));write(packet(new int[]{0x22,0x42},new int[]{1,c.get(Calendar.YEAR)%100,c.get(Calendar.MONTH)+1,c.get(Calendar.DAY_OF_MONTH),c.get(Calendar.HOUR_OF_DAY),c.get(Calendar.MINUTE),c.get(Calendar.SECOND)}));}
     final Runnable poll=new Runnable(){public void run(){if(stopped)return;if(write!=null){write(packet(new int[]{0x40,0x44},new int[]{2,0}));h.postDelayed(this,5000);}}};
     void write(byte[] b){if(gatt==null||write==null)return;try{write.setValue(b);gatt.writeCharacteristic(write);}catch(SecurityException ignored){}}
-    void parse(byte[] d){if(d==null||d.length<13||d[4]!=(byte)0x41||d[5]!=(byte)0x44)return;int co2=((d[7]&255)<<8)|(d[8]&255);int tr=d[9]&255,temp=tr<=128?tr:tr-256,hum=d[10]&255,bat=d[11]&255;getSharedPreferences("latest",0).edit().putInt("co2",co2).putInt("temp",temp).putInt("hum",hum).putInt("bat",bat).apply();String text="CO₂ "+co2+" ppm  •  "+temp+"°C  •  "+hum+"%  •  battery "+bat+"/4";update(text);reportReading(text,co2,temp,hum,bat);alarm(co2);}
+    void parse(byte[] d){if(d==null||d.length<13||d[4]!=(byte)0x41||d[5]!=(byte)0x44)return;int co2=((d[7]&255)<<8)|(d[8]&255);int tr=d[9]&255,temp=tr<=128?tr:tr-256,hum=d[10]&255,bat=d[11]&255;getSharedPreferences("latest",0).edit().putInt("co2",co2).putInt("temp",temp).putInt("hum",hum).putInt("bat",bat).apply();String text="CO₂ "+co2+" ppm  •  "+temp+"°C  •  "+hum+"%  •  battery "+bat+"/4";update(text);reportReading(text,co2,temp,hum,bat);alarm(co2);batteryWarning(bat);}
+    void batteryWarning(int bat){
+        android.content.SharedPreferences p=getSharedPreferences("battery",0);boolean sent=p.getBoolean("low_sent",false);
+        if(bat>1){if(sent)p.edit().putBoolean("low_sent",false).apply();return;} if(sent)return;
+        Intent open=new Intent(this,MainActivity.class);open.putExtra("tab","monitor");open.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi=PendingIntent.getActivity(this,102,open,PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n=new Notification.Builder(this,BATTERY_CH).setSmallIcon(android.R.drawable.ic_lock_idle_low_battery).setContentTitle("HTRAM battery low").setContentText("Battery level "+bat+"/4 — recharge the HTRAM soon.").setContentIntent(pi).setAutoCancel(true).build();
+        getSystemService(NotificationManager.class).notify(102,n);p.edit().putBoolean("low_sent",true).apply();report("Low battery warning: "+bat+"/4");
+    }
     void alarm(int co2){
         android.content.SharedPreferences p=getSharedPreferences("alarm",0);int warning=p.getInt("warning",800), limit=p.getInt("alarm",1200), delay=p.getInt("delay",2), repeat=p.getInt("repeat",2);
         long now=System.currentTimeMillis();if(co2<warning){highSince=0;lastAlarm=0;p.edit().putBoolean("silenced",false).apply();return;}if(co2<limit){highSince=0;lastAlarm=0;return;}if(p.getBoolean("silenced",false))return;
