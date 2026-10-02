@@ -4,7 +4,7 @@
 <head>
     <meta name="google-site-verification" content="v8OCuTDciyt_ZFpnl77QTEDwBf9LESnMY9tQOaKg-Ok" />
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">\n    <meta name="theme-color" content="#0d0e12">\n    <meta name="mobile-web-app-capable" content="yes">\n    <link rel="manifest" href="manifest.webmanifest">
     <title>Honeywell Air Monitor (HTRAM-V1-W)</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
@@ -82,7 +82,7 @@
                 <span id="timestamp" class="timestamp"></span>
             </footer>
 
-            <div class="actions" style="margin-top: 20px;">
+            <section class="alarm-panel">\n                <div class="alarm-heading"><h3>CO₂ alarms</h3><span id="alarmState" class="alarm-state">Ready</span></div>\n                <div class="alarm-grid">\n                    <label>Warning <span>ppm</span><input id="warningPpm" type="number" min="400" max="5000" step="50"></label>\n                    <label>Alarm <span>ppm</span><input id="alarmPpm" type="number" min="450" max="5000" step="50"></label>\n                    <label>Delay <span>min</span><input id="alarmDelay" type="number" min="0" max="60" step="1"></label>\n                </div>\n                <div class="alarm-options">\n                    <label><input id="soundEnabled" type="checkbox"> Sound</label>\n                    <label><input id="vibrationEnabled" type="checkbox"> Vibrate</label>\n                    <button id="testAlarmBtn" class="secondary-btn compact">Test</button>\n                    <button id="silenceAlarmBtn" class="secondary-btn compact">Silence</button>\n                </div>\n                <p class="alarm-note">Alarms are evaluated locally in this browser. Keep the PWA open for reliable Bluetooth monitoring.</p>\n            </section>\n\n            <div class="actions" style="margin-top: 20px;">
                 <button id="historyBtn" class="secondary-btn" style="width: 100%;">Fetch History Log</button>
             </div>
 
@@ -117,7 +117,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    <script src="app.js"></script>
+    <script src="app.js"></script>\n    <script>if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));</script>
 </body>
 
 </html>
