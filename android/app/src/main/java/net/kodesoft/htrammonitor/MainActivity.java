@@ -14,6 +14,7 @@ public class MainActivity extends Activity {
     private static final int REQ = 7;
     private TextView status, logView;
     private ScrollView logScroll;
+    private boolean followLog=true;
     private Spinner profile;
     private EditText warning, alarm, delay, repeat;
     private BroadcastReceiver serviceStatus;
@@ -30,13 +31,17 @@ public class MainActivity extends Activity {
         TextView logTitle=tv("Log",14); logTitle.setTextColor(Color.LTGRAY); root.addView(logTitle);
         logView=tv("",12); logView.setTextColor(Color.rgb(160,220,170)); logView.setBackgroundColor(Color.rgb(5,7,8)); logView.setPadding(16,12,16,12);
         logView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        logView.setTextIsSelectable(true); logView.setFocusable(true); logView.setFocusableInTouchMode(true);
+        logView.setLongClickable(true); logView.setVerticalScrollBarEnabled(false);
         logScroll=new ScrollView(this); logScroll.setFillViewport(true); logScroll.setVerticalScrollBarEnabled(true);
+        logScroll.setOnTouchListener((v,e)->{ if(e.getAction()==android.view.MotionEvent.ACTION_DOWN || e.getAction()==android.view.MotionEvent.ACTION_MOVE) followLog=false; return false; });
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,360); lp.setMargins(0,5,0,10); logScroll.setLayoutParams(lp); logScroll.addView(logView); root.addView(logScroll);
         LinearLayout logButtons=new LinearLayout(this); logButtons.setOrientation(LinearLayout.HORIZONTAL);
-        Button copyLog=new Button(this); copyLog.setText("COPY LOG"); Button clearLog=new Button(this); clearLog.setText("CLEAR");
-        logButtons.addView(copyLog,new LinearLayout.LayoutParams(0,-2,1)); logButtons.addView(clearLog,new LinearLayout.LayoutParams(0,-2,1)); root.addView(logButtons);
+        Button copyLog=new Button(this); copyLog.setText("COPY LOG"); Button clearLog=new Button(this); clearLog.setText("CLEAR"); Button follow=new Button(this); follow.setText("FOLLOW");
+        logButtons.addView(copyLog,new LinearLayout.LayoutParams(0,-2,1)); logButtons.addView(clearLog,new LinearLayout.LayoutParams(0,-2,1)); logButtons.addView(follow,new LinearLayout.LayoutParams(0,-2,1)); root.addView(logButtons);
         copyLog.setOnClickListener(v->{ android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE); cm.setPrimaryClip(android.content.ClipData.newPlainText("HTRAM log",logView.getText())); Toast.makeText(this,"Log copied",Toast.LENGTH_SHORT).show(); });
         clearLog.setOnClickListener(v->{ getSharedPreferences("debug",0).edit().remove("log").apply(); logView.setText(""); });
+        follow.setOnClickListener(v->{followLog=true;if(followLog) logScroll.post(()->logScroll.fullScroll(View.FOCUS_DOWN));});
 
         profile = new Spinner(this);
         ArrayAdapter<String> pa = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
