@@ -24,6 +24,13 @@ public class MainActivity extends Activity {
 
     void buildUi(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
+        final int baseTop=dp(8);
+        root.setOnApplyWindowInsetsListener((v,insets)->{
+            int top=insets.getSystemWindowInsetTop();
+            v.setPadding(0,top+baseTop,0,0);
+            return insets;
+        });
+        root.requestApplyInsets();
         LinearLayout head=new LinearLayout(this);head.setPadding(28,28,28,18);head.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout names=new LinearLayout(this);names.setOrientation(LinearLayout.VERTICAL);
         TextView brand=tv("HONEYWELL",12);brand.setTextColor(ORANGE);brand.setTypeface(Typeface.DEFAULT,Typeface.BOLD);names.addView(brand);names.addView(tv("HTRAM-V1-W",20));
@@ -94,7 +101,7 @@ public class MainActivity extends Activity {
     void startMonitor(){Intent i=new Intent(this,HtramService.class);status.setText("Starting service…");try{if(Build.VERSION.SDK_INT>=26)startForegroundService(i);else startService(i);}catch(Exception e){appendLog("START ERROR: "+e);}}
     @Override protected void onStart(){super.onStart();IntentFilter f=new IntentFilter("net.kodesoft.htrammonitor.STATUS");if(Build.VERSION.SDK_INT>=33)registerReceiver(receiver,f,RECEIVER_NOT_EXPORTED);else registerReceiver(receiver,f);}
     @Override protected void onStop(){try{unregisterReceiver(receiver);}catch(Exception ignored){}super.onStop();}
-    int n(EditText e,int d){try{return Integer.parseInt(e.getText().toString());}catch(Exception x){return d;}}
+    int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}\n    int n(EditText e,int d){try{return Integer.parseInt(e.getText().toString());}catch(Exception x){return d;}}
     LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     LinearLayout card(){LinearLayout l=column();l.setPadding(22,20,22,20);l.setBackgroundColor(CARD);return l;}
     LinearLayout fieldBox(String s,EditText e){LinearLayout l=column();l.setPadding(4,12,4,0);l.addView(small(s));l.addView(e);return l;}
