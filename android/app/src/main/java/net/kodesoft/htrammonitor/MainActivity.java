@@ -13,14 +13,14 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     static final int REQ=7, BG=Color.rgb(13,14,18), CARD=Color.rgb(29,31,37), ORANGE=Color.rgb(255,157,0), GREEN=Color.rgb(0,230,118), YELLOW=Color.rgb(255,234,0), RED=Color.rgb(255,82,82);
-    TextView status,logView,co2Value,tempValue,humValue,batValue,co2State,alarmState,monitorTab,serviceTab;
-    ScrollView logScroll; boolean followLog=true,loading=true; Spinner profile; EditText warning,alarm,delay,repeat; Switch sound,vibrate; LinearLayout monitorPage,servicePage; BroadcastReceiver receiver;
+    TextView status,logView,co2Value,tempValue,humValue,batValue,co2State,alarmState,monitorTab,serviceTab,helpTab;
+    ScrollView logScroll; boolean followLog=true,loading=true; Spinner profile; EditText warning,alarm,delay,repeat; Switch sound,vibrate; LinearLayout monitorPage,servicePage,helpPage; BroadcastReceiver receiver;
 
     @Override public void onCreate(Bundle b){super.onCreate(b); buildUi(); load(); loadLatest(); receiver=new BroadcastReceiver(){public void onReceive(Context c,Intent i){
         String t=i.getStringExtra("text"); if(t!=null){status.setText(t);appendLog(t);}
         if(i.hasExtra("co2")) updateReadings(i.getIntExtra("co2",0),i.getIntExtra("temp",0),i.getIntExtra("hum",0),i.getIntExtra("bat",0));
     }};
-    if("service".equals(getIntent().getStringExtra("tab"))) showTab(false); else showTab(true);}
+    if("service".equals(getIntent().getStringExtra("tab"))) showTab(1); else if("help".equals(getIntent().getStringExtra("tab"))) showTab(2); else showTab(0);}
 
     void buildUi(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
@@ -29,10 +29,10 @@ public class MainActivity extends Activity {
         TextView brand=tv("HONEYWELL",12);brand.setTextColor(ORANGE);brand.setTypeface(Typeface.DEFAULT,Typeface.BOLD);names.addView(brand);names.addView(tv("HTRAM-V1-W",20));
         head.addView(names,new LinearLayout.LayoutParams(0,-2,1));status=tv("Resident monitor",12);status.setTextColor(Color.LTGRAY);head.addView(status);root.addView(head);
         LinearLayout tabs=new LinearLayout(this);tabs.setPadding(20,0,20,12);
-        monitorTab=tab("MONITOR");serviceTab=tab("SERVICE / LOG");tabs.addView(monitorTab,new LinearLayout.LayoutParams(0,52,1));tabs.addView(serviceTab,new LinearLayout.LayoutParams(0,52,1));root.addView(tabs);
+        monitorTab=tab("MONITOR");serviceTab=tab("SERVICE / LOG");helpTab=tab("HELP");tabs.addView(monitorTab,new LinearLayout.LayoutParams(0,52,1));tabs.addView(serviceTab,new LinearLayout.LayoutParams(0,52,1));tabs.addView(helpTab,new LinearLayout.LayoutParams(0,52,1));root.addView(tabs);
         FrameLayout pages=new FrameLayout(this);root.addView(pages,new LinearLayout.LayoutParams(-1,0,1));
-        monitorPage=monitorUi();servicePage=serviceUi();pages.addView(monitorPage);pages.addView(servicePage);
-        monitorTab.setOnClickListener(v->showTab(true));serviceTab.setOnClickListener(v->showTab(false));setContentView(root);
+        monitorPage=monitorUi();servicePage=serviceUi();helpPage=helpUi();pages.addView(monitorPage);pages.addView(servicePage);pages.addView(helpPage);
+        monitorTab.setOnClickListener(v->showTab(0));serviceTab.setOnClickListener(v->showTab(1));helpTab.setOnClickListener(v->showTab(2));setContentView(root);
     }
 
     LinearLayout monitorUi(){
@@ -68,7 +68,22 @@ public class MainActivity extends Activity {
         String old=getSharedPreferences("debug",0).getString("log","");logView.setText(old);logScroll.post(()->logScroll.fullScroll(View.FOCUS_DOWN));return body;
     }
 
-    void showTab(boolean monitor){monitorPage.setVisibility(monitor?View.VISIBLE:View.GONE);servicePage.setVisibility(monitor?View.GONE:View.VISIBLE);monitorTab.setTextColor(monitor?ORANGE:Color.GRAY);serviceTab.setTextColor(monitor?Color.GRAY:ORANGE);}
+    void showTab(int which){monitorPage.setVisibility(which==0?View.VISIBLE:View.GONE);servicePage.setVisibility(which==1?View.VISIBLE:View.GONE);helpPage.setVisibility(which==2?View.VISIBLE:View.GONE);monitorTab.setTextColor(which==0?ORANGE:Color.GRAY);serviceTab.setTextColor(which==1?ORANGE:Color.GRAY);helpTab.setTextColor(which==2?ORANGE:Color.GRAY);}
+    LinearLayout helpUi(){
+        LinearLayout body=column();ScrollView sv=new ScrollView(this);LinearLayout c=column();c.setPadding(24,8,24,36);sv.addView(c);body.addView(sv,new LinearLayout.LayoutParams(-1,0,1));
+        TextView title=tv("HTRAM Monitor",28);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);c.addView(title);TextView ver=small("Version 0.7.0");ver.setTextColor(ORANGE);ver.setPadding(0,2,0,22);c.addView(ver);
+        helpSection(c,"What is this app?","An independent Android monitor for the Honeywell HTRAM. It reads the sensor over Bluetooth Low Energy and can keep monitoring while the screen is off.");
+        helpSection(c,"Device","Designed for the Honeywell Transmission Risk Air Monitor HTRAM-V1-W.");
+        helpSection(c,"How it works","The resident Android service connects directly to the HTRAM over BLE, reads CO₂, temperature, humidity and battery level, and evaluates alarm thresholds locally on your phone. No Honeywell account or cloud service is required. CO₂ alarms and settings in this app do not change the sensor's own alarm parameters.");
+        helpSection(c,"Low battery warning","A separate warning notification is shown when the HTRAM reports battery level 1/4 or lower. It is intentionally distinct from the CO₂ alarm.");
+        helpSection(c,"Project","This Android app and the extended web/PWA version are maintained in the tupolev/honeywell-htram-v1w-ble-monitor repository.");
+        TextView repo=link("Open project repository","https://github.com/tupolev/honeywell-htram-v1w-ble-monitor");c.addView(repo);
+        helpSection(c,"Acknowledgement","Based on the reverse-engineering and original Web Bluetooth project by noname122021. That work documented the HTRAM BLE protocol and made this independent native implementation possible.");
+        TextView original=link("Original noname122021 project","https://github.com/noname122021/honeywell-htram-v1w-ble-monitor");c.addView(original);
+        return body;
+    }
+    void helpSection(LinearLayout c,String h,String text){TextView t=tv(h,18);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,20,0,6);c.addView(t);TextView p=tv(text,14);p.setTextColor(Color.LTGRAY);p.setLineSpacing(0,1.15f);c.addView(p);}
+    TextView link(String label,String url){TextView t=tv(label,15);t.setTextColor(Color.rgb(80,170,255));t.setPadding(0,10,0,10);t.setPaintFlags(t.getPaintFlags()|android.graphics.Paint.UNDERLINE_TEXT_FLAG);t.setOnClickListener(v->{try{startActivity(new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(url)));}catch(Exception ignored){}});return t;}
     void updateReadings(int co2,int temp,int hum,int bat){co2Value.setText(String.valueOf(co2));tempValue.setText(temp+" °C");humValue.setText(hum+" %");batValue.setText(bat+"/4");int w=n(warning,800),a=n(alarm,1200);if(co2>=a){co2Value.setTextColor(RED);co2State.setText("High — ventilate");alarmState.setText("ALARM");alarmState.setTextColor(RED);}else if(co2>=w){co2Value.setTextColor(YELLOW);co2State.setText("Warning");alarmState.setText("WARNING");alarmState.setTextColor(YELLOW);}else{co2Value.setTextColor(GREEN);co2State.setText("Good");alarmState.setText("READY");alarmState.setTextColor(GREEN);}}
     void loadLatest(){android.content.SharedPreferences p=getSharedPreferences("latest",0);if(p.contains("co2"))updateReadings(p.getInt("co2",0),p.getInt("temp",0),p.getInt("hum",0),p.getInt("bat",0));}
     void appendLog(String msg){String ts=new java.text.SimpleDateFormat("HH:mm:ss",Locale.getDefault()).format(new Date());logView.append("["+ts+"] "+msg+"\n");if(followLog)logScroll.post(()->logScroll.fullScroll(View.FOCUS_DOWN));}
