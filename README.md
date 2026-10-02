@@ -372,5 +372,79 @@ Timestamp_UTC,CO2_ppm,Temp_C,Humidity_pct
 
 ---
 
+## 📱 Extended PWA & Native Android Resident Monitor
+
+This fork extends the original HTRAM project with a configurable PWA alarm system and a native Android application designed for reliable background monitoring.
+
+### PWA additions
+
+The Web Bluetooth dashboard now includes:
+
+- Installable **Progressive Web App (PWA)** support with a manifest and service worker.
+- Configurable local CO₂ warning and alarm thresholds.
+- Alarm delay and repeat interval.
+- Optional sound and vibration.
+- Silence/re-arm controls.
+- Ready-made profiles: **Home**, **Udo awake**, **Udo sleeping**, and **Custom**.
+- Alarm settings persisted locally in the browser.
+
+> Web Bluetooth is still subject to browser/background limitations. For monitoring with the phone screen off, use the native Android app below.
+
+### Native Android app
+
+A native Android implementation lives in the `android/` directory. It communicates directly with the HTRAM over BLE and runs a foreground service so monitoring can continue while the screen is off.
+
+Current native features include:
+
+- Live **CO₂, temperature, humidity and battery** readings.
+- Resident foreground BLE monitoring with automatic reconnection.
+- Persistent Android monitoring notification.
+- Configurable CO₂ warning/alarm thresholds, delay and repeat interval.
+- **Home**, **Udo awake**, **Udo sleeping**, and **Custom** alarm profiles.
+- Optional alarm sound and vibration.
+- Silence/re-arm support.
+- High-CO₂ notifications that open the app directly on the Monitor tab.
+- Separate **low-battery warning** when the HTRAM reports battery level **1/4 or 0/4**. The warning is issued once and rearms after the battery rises above that level.
+- Last sensor reading stored locally so the dashboard can display it immediately when reopened.
+- Android system-bar/window-inset handling so the interface does not overlap the status bar.
+
+The native UI is split into three tabs:
+
+1. **MONITOR** — PWA-style live dashboard and alarm configuration.
+2. **SERVICE / LOG** — foreground-service controls plus a persistent diagnostic console. The log can be manually scrolled, its text selected/copied, cleared, or returned to auto-follow mode.
+3. **HELP** — app/version information, device and operation description, repository link, and acknowledgement of the original reverse-engineering project.
+
+### Android permissions and operation
+
+On current Android versions the app requests the Bluetooth Nearby Devices permissions and notification permission required for resident monitoring. The app scans for the HTRAM, establishes the custom GATT connection, enables notifications and polls the sensor periodically.
+
+Alarm evaluation is performed **locally on the Android phone**. The app does not require a Honeywell account or Honeywell cloud service, and the configurable app alarm thresholds do **not** rewrite the HTRAM's own sensor/alarm parameters.
+
+### Building the Android APK
+
+GitHub Actions contains an **Android APK** workflow that builds the debug APK whenever relevant Android files are changed. The same build can be produced locally from the `android/` directory with Gradle:
+
+```bash
+cd android
+gradle assembleDebug
+```
+
+The resulting APK is located at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Project acknowledgement
+
+The Android implementation and the additions in this fork build on the BLE protocol reverse-engineering and Web Bluetooth work of **noname122021**:
+
+- Original project: https://github.com/noname122021/honeywell-htram-v1w-ble-monitor
+- This extended fork: https://github.com/tupolev/honeywell-htram-v1w-ble-monitor
+
+The original project's protocol research made the independent PWA and native Android extensions possible.
+
+---
+
 ## Legal Disclaimer
 This information and the accompanying scripts are for educational and interoperability purposes only. All product names, logos, and brands are property of their respective owners.
