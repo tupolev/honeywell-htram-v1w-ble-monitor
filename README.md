@@ -19,6 +19,16 @@ This repository contains a professional suite of tools for monitoring and loggin
 
 ---
 
+## 📱 Download the Android app
+
+[![Latest release](https://img.shields.io/github/v/release/tupolev/honeywell-htram-v1w-ble-monitor?label=Android%20APK&logo=android)](https://github.com/tupolev/honeywell-htram-v1w-ble-monitor/releases/latest)
+
+**[Download the latest HTRAM Monitor APK](https://github.com/tupolev/honeywell-htram-v1w-ble-monitor/releases/latest)**
+
+The native Android app provides resident BLE monitoring, configurable CO₂ alarms, low-battery warnings and a live dashboard even when the phone screen is off.
+
+---
+
 ## 🚀 Choose Your Monitor
 
 | Method | Best For | Status |
