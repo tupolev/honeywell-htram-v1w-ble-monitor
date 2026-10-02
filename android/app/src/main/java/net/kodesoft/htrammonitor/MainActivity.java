@@ -12,7 +12,7 @@ import java.util.*;
 
 public class MainActivity extends Activity {
     private static final int REQ = 7;
-    private TextView status;
+    private TextView status, logView;
     private Spinner profile;
     private EditText warning, alarm, delay, repeat;
     private BroadcastReceiver serviceStatus;
@@ -26,6 +26,11 @@ public class MainActivity extends Activity {
         TextView title = tv("HTRAM Monitor", 30); root.addView(title);
         TextView sub = tv("Resident CO₂ monitor", 16); sub.setTextColor(Color.LTGRAY); root.addView(sub);
         status = tv("Stopped", 18); status.setPadding(0,30,0,25); root.addView(status);
+        TextView logTitle=tv("Log",14); logTitle.setTextColor(Color.LTGRAY); root.addView(logTitle);
+        logView=tv("",12); logView.setTextColor(Color.rgb(160,220,170)); logView.setBackgroundColor(Color.rgb(5,7,8)); logView.setPadding(16,12,16,12);
+        logView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        ScrollView logScroll=new ScrollView(this); logScroll.setFillViewport(true);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,220); lp.setMargins(0,5,0,10); logScroll.setLayoutParams(lp); logScroll.addView(logView); root.addView(logScroll);
 
         profile = new Spinner(this);
         ArrayAdapter<String> pa = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -52,12 +57,17 @@ public class MainActivity extends Activity {
         note.setTextColor(Color.LTGRAY); note.setPadding(0,25,0,0); root.addView(note);
         setContentView(root);
 
-        serviceStatus = new BroadcastReceiver(){ @Override public void onReceive(Context c, Intent i){ status.setText(i.getStringExtra("text")); } };
+        serviceStatus = new BroadcastReceiver(){ @Override public void onReceive(Context c, Intent i){ String t=i.getStringExtra("text"); status.setText(t); appendLog(t); } };
         load();
         start.setOnClickListener(v -> requestAndStart());
         stop.setOnClickListener(v -> { stopService(new Intent(this,HtramService.class)); status.setText("Stopped"); });
     }
 
+    private void appendLog(String msg){
+        String ts=new java.text.SimpleDateFormat("HH:mm:ss",java.util.Locale.getDefault()).format(new java.util.Date());
+        logView.append("["+ts+"] "+msg+"\n");
+        View p=(View)logView.getParent(); if(p instanceof ScrollView)((ScrollView)p).post(()->((ScrollView)p).fullScroll(View.FOCUS_DOWN));
+    }
     private TextView tv(String s,int size){ TextView t=new TextView(this); t.setText(s);t.setTextSize(size);t.setTextColor(Color.WHITE);return t; }
     private TextView label(String s){ TextView t=tv(s,14);t.setPadding(0,15,0,4);return t; }
     private EditText number(String s){ EditText e=new EditText(this);e.setText(s);e.setTextColor(Color.WHITE);e.setInputType(2);e.setBackgroundColor(Color.rgb(40,43,50));e.setPadding(18,8,18,8);return e; }
@@ -67,29 +77,29 @@ public class MainActivity extends Activity {
     @Override protected void onStop(){ try{unregisterReceiver(serviceStatus);}catch(Exception ignored){} super.onStop(); }
 
     private void requestAndStart(){
-        status.setText("Checking permissions…");
+        status.setText("Checking permissions…"); appendLog("START pressed");
         ArrayList<String> ps=new ArrayList<>();
         if(Build.VERSION.SDK_INT>=31){
             if(checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.BLUETOOTH_SCAN);
             if(checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.BLUETOOTH_CONNECT);
         }
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED) ps.add(Manifest.permission.POST_NOTIFICATIONS);
-        if(!ps.isEmpty()){ status.setText("Waiting for Android permissions…"); requestPermissions(ps.toArray(new String[0]),REQ); return; }
+        if(!ps.isEmpty()){ status.setText("Waiting for Android permissions…"); appendLog("Requesting Android permissions: "+ps); requestPermissions(ps.toArray(new String[0]),REQ); return; }
         startMonitor();
     }
     @Override public void onRequestPermissionsResult(int r,String[] p,int[] g){ super.onRequestPermissionsResult(r,p,g); if(r==REQ){
         boolean bluetoothOk=true;
         for(int i=0;i<g.length;i++) if(g[i]!=PackageManager.PERMISSION_GRANTED && (p[i].equals(Manifest.permission.BLUETOOTH_SCAN)||p[i].equals(Manifest.permission.BLUETOOTH_CONNECT))) bluetoothOk=false;
-        if(!bluetoothOk){status.setText("Bluetooth permission denied");Toast.makeText(this,"Nearby devices permission is required",Toast.LENGTH_LONG).show();return;}
+        if(!bluetoothOk){status.setText("Bluetooth permission denied"); appendLog("ERROR: Bluetooth permission denied");Toast.makeText(this,"Nearby devices permission is required",Toast.LENGTH_LONG).show();return;}
         startMonitor();
     } }
     private int n(EditText e,int d){try{return Integer.parseInt(e.getText().toString());}catch(Exception x){return d;}}
     private void startMonitor(){
         int w=n(warning,800), a=n(alarm,1200); if(a<=w){Toast.makeText(this,"Alarm must be higher than warning",Toast.LENGTH_LONG).show();return;}
         getSharedPreferences("alarm",0).edit().putInt("warning",w).putInt("alarm",a).putInt("delay",n(delay,2)).putInt("repeat",Math.max(1,n(repeat,2))).putInt("profile",profile.getSelectedItemPosition()).apply();
-        Intent i=new Intent(this,HtramService.class); status.setText("Starting foreground service…");
+        Intent i=new Intent(this,HtramService.class); status.setText("Starting foreground service…"); appendLog("Starting foreground service");
         try { ContextCompatShim.startForeground(this,i); Toast.makeText(this,"HTRAM monitor started",Toast.LENGTH_SHORT).show(); }
-        catch(Exception e){ status.setText("START ERROR: "+e.getClass().getSimpleName()+": "+e.getMessage()); }
+        catch(Exception e){ String x="START ERROR: "+e.getClass().getSimpleName()+": "+e.getMessage(); status.setText(x); appendLog(x); }
     }
     private void load(){
         android.content.SharedPreferences p=getSharedPreferences("alarm",0);
