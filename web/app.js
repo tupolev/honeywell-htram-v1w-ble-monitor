@@ -517,3 +517,95 @@ function onDisconnected() {
     document.getElementById('statusLabel').textContent = "Disconnected";
 }
 loadDeviceHistory();
+
+
+/* Local configurable CO2 alarms + PWA helpers */
+const ALARM_SETTINGS_KEY = 'htram_alarm_settings_v1';
+const DEFAULT_ALARM_SETTINGS = { warningPpm: 800, alarmPpm: 1200, delayMinutes: 2, sound: true, vibration: true };
+let alarmSettings = { ...DEFAULT_ALARM_SETTINGS };
+let highSince = null;
+let alarmActive = false;
+let alarmSilenced = false;
+let audioContext = null;
+
+function loadAlarmSettings() {
+    try { alarmSettings = { ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(localStorage.getItem(ALARM_SETTINGS_KEY) || '{}') }; } catch (_) {}
+    document.getElementById('warningPpm').value = alarmSettings.warningPpm;
+    document.getElementById('alarmPpm').value = alarmSettings.alarmPpm;
+    document.getElementById('alarmDelay').value = alarmSettings.delayMinutes;
+    document.getElementById('soundEnabled').checked = alarmSettings.sound;
+    document.getElementById('vibrationEnabled').checked = alarmSettings.vibration;
+}
+function saveAlarmSettings() {
+    const warningPpm = Number(document.getElementById('warningPpm').value);
+    const alarmPpm = Number(document.getElementById('alarmPpm').value);
+    if (!Number.isFinite(warningPpm) || !Number.isFinite(alarmPpm) || warningPpm < 400 || alarmPpm <= warningPpm) {
+        alert('Alarm ppm must be higher than warning ppm.');
+        loadAlarmSettings();
+        return;
+    }
+    alarmSettings = {
+        warningPpm, alarmPpm,
+        delayMinutes: Math.max(0, Number(document.getElementById('alarmDelay').value) || 0),
+        sound: document.getElementById('soundEnabled').checked,
+        vibration: document.getElementById('vibrationEnabled').checked
+    };
+    localStorage.setItem(ALARM_SETTINGS_KEY, JSON.stringify(alarmSettings));
+    highSince = null; alarmActive = false; alarmSilenced = false;
+}
+['warningPpm','alarmPpm','alarmDelay','soundEnabled','vibrationEnabled'].forEach(id =>
+    document.getElementById(id).addEventListener('change', saveAlarmSettings)
+);
+function beep() {
+    if (!alarmSettings.sound) return;
+    try {
+        audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+        osc.frequency.value = 880; gain.gain.value = 0.08;
+        osc.connect(gain); gain.connect(audioContext.destination); osc.start(); osc.stop(audioContext.currentTime + 0.35);
+    } catch (_) {}
+}
+function triggerAlarm(test = false) {
+    alarmActive = true;
+    const state = document.getElementById('alarmState');
+    state.textContent = test ? 'Test alarm' : 'ALARM';
+    state.className = 'alarm-state active';
+    beep();
+    if (alarmSettings.vibration && navigator.vibrate) navigator.vibrate([300,150,300,150,600]);
+}
+function silenceAlarm() {
+    alarmSilenced = true; alarmActive = false;
+    if (navigator.vibrate) navigator.vibrate(0);
+    const state = document.getElementById('alarmState');
+    state.textContent = 'Silenced'; state.className = 'alarm-state muted';
+}
+function evaluateAlarm(co2) {
+    const card = document.querySelector('.sensor-card.co2');
+    const status = document.getElementById('co2Status');
+    if (co2 < alarmSettings.warningPpm) {
+        card.className = 'sensor-card co2 success'; status.textContent = 'Air quality OK';
+        highSince = null; alarmActive = false; alarmSilenced = false;
+        const state = document.getElementById('alarmState'); state.textContent = 'Ready'; state.className = 'alarm-state';
+    } else if (co2 < alarmSettings.alarmPpm) {
+        card.className = 'sensor-card co2 warning'; status.textContent = 'Warning — consider ventilating';
+        highSince = null; alarmActive = false; alarmSilenced = false;
+        const state = document.getElementById('alarmState'); state.textContent = 'Warning'; state.className = 'alarm-state warning';
+    } else {
+        card.className = 'sensor-card co2 danger'; status.textContent = 'High CO₂ — ventilate';
+        highSince ||= Date.now();
+        const elapsed = Date.now() - highSince;
+        const wait = alarmSettings.delayMinutes * 60000;
+        const state = document.getElementById('alarmState');
+        if (!alarmSilenced && elapsed >= wait) {
+            if (!alarmActive) triggerAlarm();
+        } else if (!alarmSilenced) {
+            state.textContent = 'Alarm in ' + Math.max(0, Math.ceil((wait - elapsed) / 60000)) + ' min';
+            state.className = 'alarm-state warning';
+        }
+    }
+}
+const originalUpdateUI = updateUI;
+updateUI = function(data) { originalUpdateUI(data); evaluateAlarm(data.co2); };
+document.getElementById('testAlarmBtn').addEventListener('click', () => { alarmSilenced = false; triggerAlarm(true); });
+document.getElementById('silenceAlarmBtn').addEventListener('click', silenceAlarm);
+loadAlarmSettings();
