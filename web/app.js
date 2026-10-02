@@ -521,18 +521,27 @@ loadDeviceHistory();
 
 /* Local configurable CO2 alarms + PWA helpers */
 const ALARM_SETTINGS_KEY = 'htram_alarm_settings_v1';
-const DEFAULT_ALARM_SETTINGS = { warningPpm: 800, alarmPpm: 1200, delayMinutes: 2, sound: true, vibration: true };
+const ALARM_PROFILES = {
+    home: { label: 'Home', warningPpm: 800, alarmPpm: 1200, delayMinutes: 2 },
+    udoAwake: { label: 'Udo awake', warningPpm: 800, alarmPpm: 1200, delayMinutes: 2 },
+    udoSleep: { label: 'Udo sleeping', warningPpm: 800, alarmPpm: 1000, delayMinutes: 1 },
+    custom: { label: 'Custom' }
+};
+const DEFAULT_ALARM_SETTINGS = { profile: 'home', warningPpm: 800, alarmPpm: 1200, delayMinutes: 2, repeatMinutes: 2, sound: true, vibration: true };
 let alarmSettings = { ...DEFAULT_ALARM_SETTINGS };
 let highSince = null;
 let alarmActive = false;
 let alarmSilenced = false;
 let audioContext = null;
+let lastAlarmAt = 0;
 
 function loadAlarmSettings() {
     try { alarmSettings = { ...DEFAULT_ALARM_SETTINGS, ...JSON.parse(localStorage.getItem(ALARM_SETTINGS_KEY) || '{}') }; } catch (_) {}
+    document.getElementById('alarmProfile').value = alarmSettings.profile || 'custom';
     document.getElementById('warningPpm').value = alarmSettings.warningPpm;
     document.getElementById('alarmPpm').value = alarmSettings.alarmPpm;
     document.getElementById('alarmDelay').value = alarmSettings.delayMinutes;
+    document.getElementById('repeatMinutes').value = alarmSettings.repeatMinutes;
     document.getElementById('soundEnabled').checked = alarmSettings.sound;
     document.getElementById('vibrationEnabled').checked = alarmSettings.vibration;
 }
@@ -545,17 +554,28 @@ function saveAlarmSettings() {
         return;
     }
     alarmSettings = {
+        profile: document.getElementById('alarmProfile').value,
         warningPpm, alarmPpm,
         delayMinutes: Math.max(0, Number(document.getElementById('alarmDelay').value) || 0),
+        repeatMinutes: Math.max(1, Number(document.getElementById('repeatMinutes').value) || 2),
         sound: document.getElementById('soundEnabled').checked,
         vibration: document.getElementById('vibrationEnabled').checked
     };
     localStorage.setItem(ALARM_SETTINGS_KEY, JSON.stringify(alarmSettings));
     highSince = null; alarmActive = false; alarmSilenced = false;
 }
-['warningPpm','alarmPpm','alarmDelay','soundEnabled','vibrationEnabled'].forEach(id =>
+['warningPpm','alarmPpm','alarmDelay','repeatMinutes','soundEnabled','vibrationEnabled'].forEach(id =>
     document.getElementById(id).addEventListener('change', saveAlarmSettings)
 );
+document.getElementById('alarmProfile').addEventListener('change', event => {
+    const profile = ALARM_PROFILES[event.target.value];
+    if (profile && event.target.value !== 'custom') {
+        document.getElementById('warningPpm').value = profile.warningPpm;
+        document.getElementById('alarmPpm').value = profile.alarmPpm;
+        document.getElementById('alarmDelay').value = profile.delayMinutes;
+    }
+    saveAlarmSettings();
+});
 function beep() {
     if (!alarmSettings.sound) return;
     try {
@@ -567,6 +587,7 @@ function beep() {
 }
 function triggerAlarm(test = false) {
     alarmActive = true;
+    lastAlarmAt = Date.now();
     const state = document.getElementById('alarmState');
     state.textContent = test ? 'Test alarm' : 'ALARM';
     state.className = 'alarm-state active';
@@ -584,7 +605,7 @@ function evaluateAlarm(co2) {
     const status = document.getElementById('co2Status');
     if (co2 < alarmSettings.warningPpm) {
         card.className = 'sensor-card co2 success'; status.textContent = 'Air quality OK';
-        highSince = null; alarmActive = false; alarmSilenced = false;
+        highSince = null; alarmActive = false; alarmSilenced = false; lastAlarmAt = 0; lastAlarmAt = 0;
         const state = document.getElementById('alarmState'); state.textContent = 'Ready'; state.className = 'alarm-state';
     } else if (co2 < alarmSettings.alarmPpm) {
         card.className = 'sensor-card co2 warning'; status.textContent = 'Warning — consider ventilating';
@@ -597,7 +618,8 @@ function evaluateAlarm(co2) {
         const wait = alarmSettings.delayMinutes * 60000;
         const state = document.getElementById('alarmState');
         if (!alarmSilenced && elapsed >= wait) {
-            if (!alarmActive) triggerAlarm();
+            const repeatMs = alarmSettings.repeatMinutes * 60000;
+            if (!alarmActive || Date.now() - lastAlarmAt >= repeatMs) triggerAlarm();
         } else if (!alarmSilenced) {
             state.textContent = 'Alarm in ' + Math.max(0, Math.ceil((wait - elapsed) / 60000)) + ' min';
             state.className = 'alarm-state warning';
